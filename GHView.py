@@ -30,6 +30,8 @@ class GHVCurses:
         self.scr=screen;
         self.notesarray=notesarray;
         self.notes=self.notesarray[0];
+        self.width = 0x10
+
         curses.init_pair(1, curses.COLOR_RED, curses.COLOR_BLACK);
         curses.init_pair(2, curses.COLOR_GREEN, curses.COLOR_BLACK);
         curses.init_pair(3, curses.COLOR_YELLOW, curses.COLOR_BLACK);
@@ -104,7 +106,7 @@ class GHVCurses:
     def drawheader(self):
         mode=MODE_STRINGS[self.mode].strip()
         self.scr.addstr(0,0,
-                        "%08x -- %10s Mode" % (self.adr,mode),
+                        "%08x -- width: %x %10s Mode" % (self.adr, self.width, mode),
                         curses.color_pair(1));
         if self.isbytemarking:
             self.scr.addstr(1,0,
@@ -125,31 +127,42 @@ class GHVCurses:
         """Draws bytes on the screen."""
         start=self.adr&~0xFF;
         for row in range(0,curses.LINES-4):
-            self.drawbyteline(row+2,start+0x10*row);
+            self.drawbyteline(row + 2, start + self.width * row);
     def drawbyteline(self,row,adrstart):
         """Draws one line of bytes to the screen."""
         self.scr.addstr(row,0,
                         "%08x" % (adrstart),
 );
-        for adr in range(adrstart,adrstart+0x10):
             
-            b=self.src.getbyte(adr);
-            s="  ";
-            if b!=None: s="%02x" %b;
             
+        extra_space = 0  # use this to add visual space between blocks
+
+        for adr in range(adrstart, adrstart + self.width):
+            b = self.src.getbyte(adr)
+            s = "%02x" % b if b != None else " "
+
             # Fetch the color from the notes.
             color=self.notes.getcolor(adr,b,self.adr);
             if adr==self.adr: color=9;
             if adr==self.marker: color=6;
-            
-            self.scr.addstr(row,15+(adr&0x0F)*3+((adr&0x08)>>3),
-                            s,
-                            curses.color_pair(color)
-                            );
-            self.scr.addstr(row,68+(adr&0x0f),
-                            self.safechr(b),
-                            curses.color_pair(color)
-                            );
+
+            offset = adr - adrstart
+            extra_space += (offset % 8 == 0) and (offset != 0)
+
+            self.scr.addstr(
+                row,
+                # 3 -> 3 chars for byte (2 hex + 1 space)
+                15 + offset * 3 + extra_space,
+                s,
+                curses.color_pair(color)
+            )
+            self.scr.addstr(
+                row,
+                (20 + (self.width * 3)) + offset,
+                self.safechr(b),
+                curses.color_pair(color)
+            )
+
     def safechr(self,c):
         """Safely returns a byte for the given string."""
         if c==None: return ' ';
@@ -164,9 +177,9 @@ class GHVCurses:
         
         #These commands work in any mode.
         if key==curses.KEY_UP:
-            self.adr=self.adr-0x10;
+            self.adr=self.adr - self.width;
         elif key==curses.KEY_DOWN:
-            self.adr=self.adr+0x10;
+            self.adr=self.adr + self.width;
         elif key==curses.KEY_LEFT:
             self.adr=self.adr-1;
         elif key==curses.KEY_RIGHT:
@@ -180,7 +193,14 @@ class GHVCurses:
         elif key==0x1B: # ESCAPE
             if self.lastkey==key:
                 self.mode=MODE_COMMAND;
-        
+        elif key == ord('+'):
+            self.width += 1
+            self.scr.clear();
+        elif key == ord('-'):
+            if self.width != 1:
+                self.scr.clear();
+                self.width -= 1
+
         #Next, handle the mode-specific commands.
         elif self.mode==MODE_COMMAND:
             self.handlekeycommand(key);

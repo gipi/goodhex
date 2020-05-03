@@ -62,6 +62,7 @@ Arrows  -- Move by one or sixteen bytes.
 ESC ESC -- Back to Command Mode
 TAB     -- Advance to the next set of Notes.
 SPACE   -- Mark currently selected byte. Used to measure distances or color many bytes in annotation mode.
++/-     -- Increase/decrease the number of bytes for line
 
 Command Mode:
 n/p     -- Move by 0x0100 bytes.
